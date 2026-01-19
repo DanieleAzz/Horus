@@ -67,8 +67,7 @@ int main(int argc, char* argv[]) {
         // A. Prepare the File System
         // We use the full path so we don't depend on where we run the script from
         std::string folderPath = horus::utils::generateTodaysFolder();
-        std::string fullPath = folderPath + getTimestampedFilename(".raw"); // .raw for now
-
+        std::string fullPath = folderPath + "/" + getTimestampedFilename(".jpg");
         std::cout << "[Main] Target File: " << fullPath << std::endl;
 
         // B. Initialize Camera

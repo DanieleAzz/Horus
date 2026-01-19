@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <fstream>
+#include <jpeglib.h>
 
 namespace horus {
 
@@ -33,8 +34,7 @@ bool Camera::start() {
     // 2. Configure: We want a Still Capture (High Res)
     config = camera->generateConfiguration({ StreamRole::StillCapture });
     
-    // Force specific format if needed (e.g., NV12 is standard for Pi ISP)
-    // config->at(0).pixelFormat = formats::NV12; 
+    config->at(0).pixelFormat = formats::BGR888;    
 
     if (config->validate() == CameraConfiguration::Invalid) {
         std::cerr << "[Camera] Invalid configuration." << std::endl;
@@ -130,36 +130,70 @@ void Camera::requestCompleteHandler(Request *req) {
     cameraCv.notify_one();
 }
 
-// HARDCORE C++: Memory Mapping
+// Helper function to compress RGB data to JPEG
+void saveJpeg(const std::string& filename, void* data, int width, int height, int stride) {
+    struct jpeg_compress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    FILE * outfile;
+    JSAMPROW row_pointer[1];
+
+    cinfo.err = jpeg_std_error(&jerr);
+    jpeg_create_compress(&cinfo);
+
+    if ((outfile = fopen(filename.c_str(), "wb")) == NULL) {
+        std::cerr << "[Camera] Can't open " << filename << std::endl;
+        return;
+    }
+    jpeg_stdio_dest(&cinfo, outfile);
+
+    cinfo.image_width = width;
+    cinfo.image_height = height;
+    cinfo.input_components = 3;     
+    cinfo.in_color_space = JCS_EXT_BGR; // We will ask the camera for BGR format
+
+    jpeg_set_defaults(&cinfo);
+    jpeg_set_quality(&cinfo, 90, TRUE); // Quality 90%
+    jpeg_start_compress(&cinfo, TRUE);
+
+    unsigned char* buffer = static_cast<unsigned char*>(data);
+
+    while (cinfo.next_scanline < cinfo.image_height) {
+        // stride is the actual width of the memory row (often aligned to 32/64 bytes)
+        row_pointer[0] = &buffer[cinfo.next_scanline * stride];
+        jpeg_write_scanlines(&cinfo, row_pointer, 1);
+    }
+
+    jpeg_finish_compress(&cinfo);
+    fclose(outfile);
+    jpeg_destroy_compress(&cinfo);
+    
+    std::cout << "[Camera] Saved JPEG: " << filename << std::endl;
+}
+
+
+// Memory Mapping
 // We have to map the Kernel's memory (DMA) into our User Space to read it.
 void Camera::saveBufferToFile(const std::string& filepath, FrameBuffer *buffer) {
+    const FrameBuffer::Plane &plane = buffer->planes()[0];
+    int fd = plane.fd.get();
+    size_t length = plane.length;
     
-    // A buffer can have multiple "planes" (e.g., Y color and UV color separated)
-    // We will dump all planes to one file.
-    std::ofstream outFile(filepath, std::ios::binary);
-    
-    for (const FrameBuffer::Plane &plane : buffer->planes()) {
-        // Get the File Descriptor (fd) of the memory
-        int fd = plane.fd.get();
-        size_t length = plane.length;
-
-        // mmap: Map the file descriptor to a pointer in our memory
-        void *data = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, 0);
-        
-        if (data == MAP_FAILED) {
-            std::cerr << "[Camera] mmap failed!" << std::endl;
-            continue;
-        }
-
-        // Write to disk
-        outFile.write(static_cast<char*>(data), length);
-
-        // Clean up
-        munmap(data, length);
+    void *data = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, 0);
+    if (data == MAP_FAILED) {
+        std::cerr << "[Camera] mmap failed!" << std::endl;
+        return;
     }
-    
-    outFile.close();
-    std::cout << "[Camera] Raw data saved to " << filepath << std::endl;
+
+    // Get dimensions from the active configuration
+    StreamConfiguration &streamConfig = config->at(0);
+    int width = streamConfig.size.width;
+    int height = streamConfig.size.height;
+    int stride = streamConfig.stride; // Crucial! Memory width != Image width
+
+    // Compress!
+    saveJpeg(filepath, data, width, height, stride);
+
+    munmap(data, length);
 }
 
 } // namespace horus

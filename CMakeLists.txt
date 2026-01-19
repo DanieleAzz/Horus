@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # --- Dependencies ---
 find_package(PkgConfig REQUIRED)
+find_package(JPEG REQUIRED)
 
 # 1. Use PkgConfig to find libcamera
 pkg_check_modules(LIBCAMERA REQUIRED libcamera)
@@ -24,6 +25,7 @@ include_directories(
     src
     ${LIBCAMERA_INCLUDE_DIRS}
     ${PAHO_MQTT_CPP_INCLUDE_DIRS}
+    ${JPEG_INCLUDE_DIRS}
 )
 
 # --- Source Files ---
@@ -43,6 +45,7 @@ target_link_libraries(horus_app PRIVATE
     ${PAHO_MQTT_CPP_LIBRARIES}
     ${PAHO_MQTT_C_LIBRARIES}
     i2c
+    ${JPEG_LIBRARIES}
 )
 
 # --- Compile Options ---
