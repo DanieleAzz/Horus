@@ -8,7 +8,7 @@
 // Include our modules
 #include "sensors/Camera/Camera.hpp"
 #include "utils/FileSystem.hpp"
-#include "BME280/bme280.hpp"
+#include "sensors/BME280/bme280.hpp"
 
 
 // Helper to get a timestamped filename
