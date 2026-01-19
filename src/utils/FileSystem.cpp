@@ -2,7 +2,8 @@
 #include <ctime>
 
 namespace fs = std::filesystem;
-
+namespace horus {
+namespace utils {
 std::string generateTodaysFolder(){
     // Get current local time:
     std::time_t t = std::time(nullptr);
@@ -16,4 +17,7 @@ std::string generateTodaysFolder(){
         fs::create_directories(path);
     }
     return path;
+}
+
+}
 }
