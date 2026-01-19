@@ -136,7 +136,6 @@ float BME280::compensateTemp(int32_t adc_T) {
     var1 = ((((adc_T >> 3) - ((int32_t)calib.dig_T1 << 1))) * ((int32_t)calib.dig_T2)) >> 11;
     var2 = (((((adc_T >> 4) - ((int32_t)calib.dig_T1)) * ((adc_T >> 4) - ((int32_t)calib.dig_T1))) >> 12) * ((int32_t)calib.dig_T3)) >> 14;
     t_fine = var1 + var2;
-    return (t_fine * 5 + 128) >> 8; // Returns temp in 100ths of DegC (e.g. 2500 = 25.00C)
     // We convert to float:
     return ((t_fine * 5 + 128) >> 8) / 100.0f;
 }
