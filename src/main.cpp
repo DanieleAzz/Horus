@@ -6,7 +6,7 @@
 #include <sstream>
 
 // Include our modules
-#include "sensors/Camera/Camera.hpp"
+#include "sensors/Camera/include/Camera.hpp"
 #include "utils/FileSystem.hpp" 
 // #include "connectivity/MqttClient.hpp" // (Coming soon)
 
