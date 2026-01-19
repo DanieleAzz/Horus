@@ -33,7 +33,7 @@ include_directories(
 add_executable(horus_app
     src/main.cpp
     src/sensors/Camera/Camera.cpp
-    # src/sensors/BME280/BME280.cpp   <-- Commented out until you create them
+    src/sensors/BME280/BME280.cpp
     # src/sensors/DS18B20/DS18B20.cpp <-- Commented out until you create them
     src/utils/FileSystem.cpp
 )

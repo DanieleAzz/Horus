@@ -7,8 +7,9 @@
 
 // Include our modules
 #include "sensors/Camera/Camera.hpp"
-#include "utils/FileSystem.hpp" 
-// #include "connectivity/MqttClient.hpp" // (Coming soon)
+#include "utils/FileSystem.hpp"
+#include "BME280/bme280.hpp"
+
 
 // Helper to get a timestamped filename
 // Returns: "img_12-00-01.jpeg"
@@ -89,8 +90,27 @@ int main(int argc, char* argv[]) {
         cam.stop();
 
     } else if (task == "monitor_internal") {
-        // TODO: BME280 logic
-        std::cout << "[Main] Internal monitoring not implemented yet." << std::endl;
+        std::cout << "[Main] Checking Internal Environment..." << std::endl;
+        // Default address 0x76, Bus 1
+        horus::BME280 sensor(0x76, 1);
+
+        if (sensor.init())
+        {
+            auto data = sensor.readAll();
+            std::cout << "--- Internal Status ---" << std::endl;
+            std::cout << "Temp: " << data.temperature << " C" << std::endl;
+            std::cout << "Hum:  " << data.humidity << " %" << std::endl;
+            std::cout << "Pres: " << data.pressure << " hPa" << std::endl;
+
+            // Safety check for internal box temperature:
+            if(data.temperature > 60.0){
+                std::cerr << "WARNING: Internal temperature overheating!" << std::endl;
+            }
+        } else{
+            std::cerr << "[Main] Failed to initialize BME280." << std::endl;
+        return 4;
+        }
+        
 
     } else if (task == "log_env") {
         // TODO: DS18B20 logic
