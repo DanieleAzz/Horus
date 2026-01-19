@@ -11,13 +11,13 @@
 // #include "connectivity/MqttClient.hpp" // (Coming soon)
 
 // Helper to get a timestamped filename
-// Returns: "img_12-00-01.raw"
+// Returns: "img_12-00-01.jpeg"
 std::string getTimestampedFilename(const std::string& extension) {
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
 
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "img_%H-%M-%S");
+    ss << std::put_time(std::localtime(&in_time_t), "img_%F_%H_%M");
     ss << extension;
     return ss.str();
 }
