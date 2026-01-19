@@ -17,7 +17,7 @@ std::string getTimestampedFilename(const std::string& extension) {
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
 
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "img_%F_%H_%M");
+    ss << std::put_time(std::localtime(&in_time_t), "img_%z");
     ss << extension;
     return ss.str();
 }
