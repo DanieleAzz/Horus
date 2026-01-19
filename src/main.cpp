@@ -6,7 +6,7 @@
 #include <sstream>
 
 // Include our modules
-#include "sensors/Camera/include/Camera.hpp"
+#include "sensors/Camera/Camera.hpp"
 #include "utils/FileSystem.hpp" 
 // #include "connectivity/MqttClient.hpp" // (Coming soon)
 
@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
         
         // A. Prepare the File System
         // We use the full path so we don't depend on where we run the script from
-        std::string folderPath = horus::utils::getTodaysFolder();
+        std::string folderPath = horus::utils::generateTodaysFolder();
         std::string fullPath = folderPath + getTimestampedFilename(".raw"); // .raw for now
 
         std::cout << "[Main] Target File: " << fullPath << std::endl;
