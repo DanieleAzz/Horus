@@ -29,7 +29,16 @@ void printUsage() {
     std::cout << "Tasks:" << std::endl;
     std::cout << "  capture          : Capture image from CSI camera" << std::endl;
     std::cout << "  monitor_internal : Read BME280 (Internal Temp)" << std::endl;
-    std::cout << "  log_env          : Read DS18B20 (External Temp)" << std::endl;
+    std::cout << "  log_env          : Read DS18B20 (External Temp) & Save CSV" << std::endl;
+}
+
+bool getBME280Data(horus::BME280Data& bme280_data) {
+    horus::BME280 sensor(0x76, 1);
+    if (sensor.init()){
+        bme280_data = sensor.readAll();
+        return true;
+    }
+    return false;
 }
 
 int main(int argc, char* argv[]) {
@@ -62,12 +71,12 @@ int main(int argc, char* argv[]) {
     // 2. Task Execution Router
     std::cout << "[Main] Starting Task: " << task << std::endl;
 
-    if (task == "capture") {
+    if(task== "capture"){
         // --- CAMERA TASK ---
         
         // A. Prepare the File System
         // We use the full path so we don't depend on where we run the script from
-        std::string folderPath = horus::utils::generateTodaysFolder();
+        std::string folderPath = horus::utils::getTodaysFolder();
         std::string fullPath = folderPath + "/" + getTimestampedFilename(".jpg");
         std::cout << "[Main] Target File: " << fullPath << std::endl;
 
@@ -89,34 +98,52 @@ int main(int argc, char* argv[]) {
         
         cam.stop();
 
-    } else if (task == "monitor_internal") {
+    } else if(task == "monitor_internal"){
         std::cout << "[Main] Checking Internal Environment..." << std::endl;
-        // Default address 0x76, Bus 1
-        horus::BME280 sensor(0x76, 1);
+        horus::BME280Data env_internal_data;
 
-        if (sensor.init())
-        {
-            auto data = sensor.readAll();
-            std::cout << "--- Internal Status ---" << std::endl;
-            std::cout << "Temp: " << data.temperature << " C" << std::endl;
-            std::cout << "Hum:  " << data.humidity << " %" << std::endl;
-            std::cout << "Pres: " << data.pressure << " hPa" << std::endl;
-
-            // Safety check for internal box temperature:
-            if(data.temperature > 60.0){
+        if(getBME280Data){
+            std::cout << "Internal Temp: " << env_internal_data.temperature << " C" << std::endl;
+            std::cout << "Internal Hum:  " << env_internal_data.humidity << " %" << std::endl;
+            if(env_interal_data.temperature > 60.0){
                 std::cerr << "WARNING: Internal temperature overheating!" << std::endl;
+                // execute --> task = "overheating";
+        }else{
+            std::cerr << "[Main] Failed to read BME280." << std::endl;
+            //todo Write to log the error
+            return 1;
             }
-        } else{
-            std::cerr << "[Main] Failed to initialize BME280." << std::endl;
-        return 4;
         }
-        
+    }else if(task == "monitor_external"){
 
-    } else if (task == "log_env") {
         // TODO: DS18B20 logic
-        std::cout << "[Main] Environment logging not implemented yet." << std::endl;
+        // horus::DS18B20 env_external_data;
+        // float external_temp = env_external_data.getData();
+        float external_temp = 20.0; //dummy data for now
+        
+        // Read internal pressure from BME280:
+        horus::BME280Data internal_data;
+        float pressure = 0.0f;
+        if(getBME280Data(internal_data)){
+            pressure = internal_data.pressure;
+        }
 
-    } else {
+        std::cout << "External Temp: " << external_temp << " C" << std::endl;
+        std::cout << "Pressure: " << pressure << " hPa" << std::endl;
+        
+        // Save to CSV the temperature data coming from DS18B20:
+        std::string timestamp = getTimestampedFilename("");
+
+        // Formatting: Timestamp, External Data, Pressure:
+        std::stringstream csvData;
+        // csvData << env_external_data << "," << pressure;
+        csvData << external_temp << "," << pressure;
+
+        horus::utils::appendToCSV("enviromental_data.csv", timestamp, csvData.str());
+    
+    }
+
+    else{
         std::cerr << "[Main] Unknown task: " << task << std::endl;
         printUsage();
         return 1;
