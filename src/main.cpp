@@ -36,6 +36,7 @@ bool getBME280Data(horus::BME280Data& bme280_data) {
     horus::BME280 sensor(0x76, 1);
     if (sensor.init()){
         bme280_data = sensor.readAll();
+        std::cout << "Internal Temp: " << bme280_data.temperature << " C" << std::endl;
         return true;
     }
     return false;
