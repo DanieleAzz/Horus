@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <ctime>
 #include <fstream>
+#include <iostream>
 
 namespace fs = std::filesystem;
 namespace horus {
@@ -33,9 +34,11 @@ void appendToCSV(const std::string& filename, const std::string& timestamp, cons
 
     if (file.is_open()) {
         if (!fileExists) {
-            file << "Timestamp,External_Temperature_C,Pressure_hPa\n";
+            file << "Timestamp,External_Temperature_C,Pressure_hPa\n"; //First row of the .csv file
         }
         file << timestamp << "," << env_data << "\n";
+        std::cout << "[FileSystem] Data appended to " << path << " successfully." << std::endl;
+        file.close();
     }
 }
 

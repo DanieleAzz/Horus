@@ -12,14 +12,20 @@
 
 
 // Helper to get a timestamped filename
-// Returns: "img_12-00-01.jpeg"
-std::string getTimestampedFilename(const std::string& extension) {
+// Returns: "2026-01-21T12:34:03CET" ISO 8601 format
+std::string getTimestamped(const std::string& extension) {
+    //ISO 8601 format
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
 
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "img_%FT%H:%M:%S%Z");
-    ss << extension;
+    if(extension == ".csv"){
+        //
+        ss << std::put_time(std::localtime(&in_time_t), "%FT%H:%M:%S%Z");
+    }else{
+        ss << std::put_time(std::localtime(&in_time_t), "img_%FT%H:%M:%S%Z");
+        ss << extension;
+    }
     return ss.str();
 }
 
@@ -132,7 +138,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Pressure: " << pressure << " hPa" << std::endl;
         
         // Save to CSV the temperature data coming from DS18B20:
-        std::string timestamp = getTimestampedFilename("");
+        std::string timestamp = getTimestampedFilename(".csv");
 
         // Formatting: Timestamp, External Data, Pressure:
         std::stringstream csvData;
