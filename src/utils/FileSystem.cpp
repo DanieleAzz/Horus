@@ -23,9 +23,8 @@ std::string getTodaysFolder(){
 
 void appendToCSV(const std::string& filename, const std::string& timestamp, const std::string& env_data) {
 
-    // std::string path = getTodaysFolder() + filename;
+    std::string path = getTodaysFolder() + "/" + filename;
     
-    std::string path = getTodaysFolder();
     
     // Check if file exists to write header
     bool fileExists = fs::exists(path);
