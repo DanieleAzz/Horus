@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
         if(getBME280Data){
             std::cout << "Internal Temp: " << env_internal_data.temperature << " C" << std::endl;
             std::cout << "Internal Hum:  " << env_internal_data.humidity << " %" << std::endl;
-            if(env_interal_data.temperature > 60.0){
+            if(env_internal_data.temperature > 60.0){
                 std::cerr << "WARNING: Internal temperature overheating!" << std::endl;
                 // execute --> task = "overheating";
         }else{
