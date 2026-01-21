@@ -36,7 +36,6 @@ bool getBME280Data(horus::BME280Data& bme280_data) {
     horus::BME280 sensor(0x76, 1);
     if (sensor.init()){
         bme280_data = sensor.readAll();
-        std::cout << "Internal Temp: " << bme280_data.temperature << " C" << std::endl;
         return true;
     }
     return false;
@@ -103,7 +102,7 @@ int main(int argc, char* argv[]) {
         std::cout << "[Main] Checking Internal Environment..." << std::endl;
         horus::BME280Data env_internal_data;
 
-        if(getBME280Data){
+        if(getBME280Data(env_internal_data)){
             std::cout << "Internal Temp: " << env_internal_data.temperature << " C" << std::endl;
             std::cout << "Internal Hum:  " << env_internal_data.humidity << " %" << std::endl;
             if(env_internal_data.temperature > 60.0){

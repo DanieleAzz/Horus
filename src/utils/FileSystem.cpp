@@ -22,12 +22,16 @@ std::string getTodaysFolder(){
 }
 
 void appendToCSV(const std::string& filename, const std::string& timestamp, const std::string& env_data) {
-    std::string path = getTodaysFolder() + filename;
+
+    // std::string path = getTodaysFolder() + filename;
+    
+    std::string path = getTodaysFolder() 
     
     // Check if file exists to write header
     bool fileExists = fs::exists(path);
     
     std::ofstream file(path, std::ios::app); // Append mode
+    
     if (file.is_open()) {
         if (!fileExists) {
             file << "Timestamp,External_Temperature_C,Pressure_hPa\n";
