@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
         // A. Prepare the File System
         // We use the full path so we don't depend on where we run the script from
         std::string folderPath = horus::utils::getTodaysFolder();
-        std::string fullPath = folderPath + "/" + getTimestampedFilename(".jpg");
+        std::string fullPath = folderPath + "/" + getTimestamped(".jpg");
         std::cout << "[Main] Target File: " << fullPath << std::endl;
 
         // B. Initialize Camera
@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Pressure: " << pressure << " hPa" << std::endl;
         
         // Save to CSV the temperature data coming from DS18B20:
-        std::string timestamp = getTimestampedFilename(".csv");
+        std::string timestamp = getTimestamped(".csv");
 
         // Formatting: Timestamp, External Data, Pressure:
         std::stringstream csvData;
