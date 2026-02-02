@@ -14,6 +14,11 @@ else
     exit 1
 fi
 
+# --- 2. INITIALIZE SERIAL PORT (CRITICAL FIX) ---
+# This sets the baud rate to 115200 and disables flow control.
+# Without this, the script WILL HANG.
+stty -F $USB_AT 115200 raw -echo -echoe -echok -crtscts
+
 # --- HELPER FUNCTIONS ---
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
@@ -21,27 +26,31 @@ log() {
 
 send_at() {
     echo -e "$1\r" > "$USB_AT"
+    # Small delay to ensure the modem processes the command
+    sleep 0.2
 }
 
 # --- START ROUTINE ---
 log "========================================"
 log "STARTING ROUTINE ($PROJECT_NAME)"
 
-# 2. WAKE UP MODEM
+# 3. WAKE UP MODEM
 log "[Modem] Waking up..."
 send_at "AT+CFUN=1"
 sleep 45 
 
-# 3. ENABLE GPS
+# 4. ENABLE GPS
 log "[GPS] Enabling module..."
 send_at "AT+CGPS=1"
 sleep 5
 
-# 4. GET GPS FIX
+# 5. GET GPS FIX
 log "[GPS] Attempting fix..."
 GPS_FIX="No Fix"
 for i in {1..5}; do
-    RAW=$(echo -e "AT+CGPSINFO\r" > "$USB_AT"; head -n 5 "$USB_AT" | grep "+CGPSINFO:")
+    # Read raw output with a timeout protection
+    RAW=$(echo -e "AT+CGPSINFO\r" > "$USB_AT"; timeout 2 head -n 5 "$USB_AT" | grep "+CGPSINFO:")
+    
     if [[ "$RAW" == *"+CGPSINFO:"* && "$RAW" != *",,,,,,"* ]]; then
         GPS_FIX=${RAW#"+CGPSINFO: "}
         break
@@ -49,29 +58,25 @@ for i in {1..5}; do
     sleep 2
 done
 
-# 4.1 Turn off GPS if no fix
+# 5.1 Handle GPS Result
 if [ "$GPS_FIX" == "No Fix" ]; then
     log "[GPS] No fix obtained."
 else
     log "[GPS] Fix obtained: $GPS_FIX"
 fi
-log "[GPS] Location: $GPS_FIX"
-log "[GPS] Turning off GPS"
-send_at "AT+CGPS=0"
-sleep 2
 
-# 5. SAVE GPS DATA
+# 6. SAVE GPS DATA
 echo "$(date '+%Y-%m-%d %H:%M:%S'),$GPS_FIX" >> "$DATA_DIR/gps_history.csv"
 
-# 6. RUN SENSORS (BME280)
+# 7. RUN SENSORS (BME280)
 log "[Sensors] Reading BME280..."
 $APP_PATH --task monitor_env >> "$LOG_FILE" 2>&1
 
-# 7. CAPTURE PHOTO
+# 8. CAPTURE PHOTO
 log "[Camera] Taking picture..."
 $APP_PATH --task capture >> "$LOG_FILE" 2>&1
 
-# 8. UPLOAD TO CLOUD
+# 9. UPLOAD TO CLOUD
 if [ "$CLOUD_ENABLED" == "true" ]; then
     log "[Cloud] Syncing to S3 ($S3_BUCKET)..."
     TODAY=$(date +%F)
@@ -81,12 +86,13 @@ else
     log "[Cloud] Disabled in config."
 fi
 
-# 9. MAINTENANCE WINDOW
+# 10. MAINTENANCE WINDOW
 log "[Maintenance] Window OPEN (30 min)."
+# Keeping GPS/Modem ON so you can SSH in
 sleep 1800 
 log "[Maintenance] Window CLOSED."
 
-# 10. SHUTDOWN
+# 11. SHUTDOWN
 log "[Modem] GPS/Radio OFF..."
 send_at "AT+CGPS=0"
 send_at "AT+CFUN=0"
