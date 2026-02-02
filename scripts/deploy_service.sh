@@ -2,115 +2,95 @@
 set -e
 
 # --- CONFIGURATION ---
-# Get the absolute path to the project root (assuming script is run from project root)
 PROJECT_DIR=$(pwd)
 EXEC_PATH="$PROJECT_DIR/build/horus_app"
+ROUTINE_SCRIPT="$PROJECT_DIR/daily_routine.sh"
 USER_NAME=$(whoami)
 
-echo "[Horus] Starting Deployment..."
+echo "[Horus] Starting Survival Deployment..."
 echo "  Project Dir: $PROJECT_DIR"
 echo "  Executable:  $EXEC_PATH"
-echo "  User:        $USER_NAME"
+echo "  Routine:     $ROUTINE_SCRIPT"
 
-# Check if executable exists
+# Validation
 if [ ! -f "$EXEC_PATH" ]; then
     echo "ERROR: Could not find executable at $EXEC_PATH"
-    echo "Please compile the project first (cd build && make)"
+    exit 1
+fi
+if [ ! -f "$ROUTINE_SCRIPT" ]; then
+    echo "ERROR: Could not find routine script at $ROUTINE_SCRIPT"
+    echo "Please create daily_routine.sh first!"
     exit 1
 fi
 
-# --- 1. INTERNAL MONITOR ROBOT (Every 1 Minute) ---
-# Task: monitor_internal (BME280)
-echo "  -> Configuring Internal Monitor (1 min)..."
+# --- 0. CLEANUP OLD SERVICES ---
+# We disable the old names to prevent conflicts
+echo "  -> Cleaning up old services..."
+sudo systemctl disable --now horus-internal.timer horus-internal.service 2>/dev/null || true
+sudo systemctl disable --now horus-external.timer horus-external.service 2>/dev/null || true
+sudo systemctl disable --now horus-capture.timer horus-capture.service 2>/dev/null || true
 
-sudo bash -c "cat > /etc/systemd/system/horus-internal.service" <<EOF
+# --- 1. ENV MONITOR (Every 15 Minutes) ---
+# Task: monitor_env (BME280 -> CSV)
+# This runs locally 24/7. Does NOT touch the modem.
+echo "  -> Configuring Environmental Monitor (15 min)..."
+
+sudo bash -c "cat > /etc/systemd/system/horus-monitor.service" <<EOF
 [Unit]
-Description=Horus Internal Monitor (BME280)
+Description=Horus Environmental Logger (BME280)
 After=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=$EXEC_PATH --task monitor_internal
+ExecStart=$EXEC_PATH --task monitor_env
 User=$USER_NAME
 WorkingDirectory=$PROJECT_DIR
 StandardOutput=journal
 StandardError=journal
 EOF
 
-sudo bash -c "cat > /etc/systemd/system/horus-internal.timer" <<EOF
+sudo bash -c "cat > /etc/systemd/system/horus-monitor.timer" <<EOF
 [Unit]
-Description=Trigger Horus Internal Monitor every minute
+Description=Trigger Horus Monitor every 15 minutes
 
 [Timer]
-OnBootSec=1min
-OnUnitActiveSec=1min
-Unit=horus-internal.service
-
-[Install]
-WantedBy=timers.target
-EOF
-
-# --- 2. EXTERNAL SENSOR ROBOT (Every 15 Minutes) ---
-# Task: monitor_external (DS18B20 + CSV)
-echo "  -> Configuring External Logger (15 min)..."
-
-sudo bash -c "cat > /etc/systemd/system/horus-external.service" <<EOF
-[Unit]
-Description=Horus External Sensor (DS18B20)
-After=multi-user.target
-
-[Service]
-Type=oneshot
-ExecStart=$EXEC_PATH --task monitor_external
-User=$USER_NAME
-WorkingDirectory=$PROJECT_DIR
-StandardOutput=journal
-StandardError=journal
-EOF
-
-sudo bash -c "cat > /etc/systemd/system/horus-external.timer" <<EOF
-[Unit]
-Description=Trigger Horus External Logger every 15 minutes
-
-[Timer]
-OnBootSec=2min
+# Run 4 minutes after boot, then every 15 minutes
+OnBootSec=4min
 OnUnitActiveSec=15min
-Unit=horus-external.service
+Unit=horus-monitor.service
 
 [Install]
 WantedBy=timers.target
 EOF
 
-# --- 3. CAMERA ROBOT (12pm, 2pm, 4pm) ---
-# Task: capture (Camera)
-echo "  -> Configuring Camera Capture (12, 14, 16)..."
+# --- 2. DAILY MASTER ROBOT (12:00 PM) ---
+# Task: daily_routine.sh (Modem -> GPS -> Picture -> Upload -> Sleep)
+echo "  -> Configuring Daily Master Routine (12:00 PM)..."
 
-sudo bash -c "cat > /etc/systemd/system/horus-capture.service" <<EOF
+sudo bash -c "cat > /etc/systemd/system/horus-daily.service" <<EOF
 [Unit]
-Description=Horus Camera Capture
+Description=Horus Daily Routine (Upload & Maintenance)
 After=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=$EXEC_PATH --task capture
-User=$USER_NAME
+# IMPORTANT: Points to the BASH SCRIPT, not the C++ App directly
+ExecStart=$ROUTINE_SCRIPT
+User=root
 WorkingDirectory=$PROJECT_DIR
 StandardOutput=journal
 StandardError=journal
 EOF
 
-sudo bash -c "cat > /etc/systemd/system/horus-capture.timer" <<EOF
+sudo bash -c "cat > /etc/systemd/system/horus-daily.timer" <<EOF
 [Unit]
-Description=Trigger Horus Camera at 12pm, 2pm, 4pm
+Description=Trigger Horus Daily Routine at Noon
 
 [Timer]
-# I am testing 8am 12pm 11pm first
-# Run at 12:00, 14:00, and 16:00 every day
-OnCalendar=*-*-* 08:00:00
+# Run exactly at 12:00:00 PM every day
 OnCalendar=*-*-* 12:00:00
-OnCalendar=*-*-* 23:00:00
 Persistent=true
-Unit=horus-capture.service
+Unit=horus-daily.service
 
 [Install]
 WantedBy=timers.target
@@ -121,11 +101,10 @@ echo "[Horus] Reloading Systemd..."
 sudo systemctl daemon-reload
 
 echo "[Horus] Enabling Timers..."
-sudo systemctl enable --now horus-internal.timer
-sudo systemctl enable --now horus-external.timer
-sudo systemctl enable --now horus-capture.timer
+sudo systemctl enable --now horus-monitor.timer
+sudo systemctl enable --now horus-daily.timer
 
 echo "[Horus] Deployment Complete!"
 echo "------------------------------------------------"
-echo "Check status with: systemctl list-timers --all | grep horus"
-echo "View logs with:    journalctl -t horus_app (or -u horus-capture.service)"
+echo "Active Timers:"
+systemctl list-timers --all | grep horus

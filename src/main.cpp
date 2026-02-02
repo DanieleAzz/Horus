@@ -1,6 +1,6 @@
 #include <iostream>
 #include <string>
-#include <cstring> // for strcmp
+#include <cstring>
 #include <chrono>
 #include <iomanip>
 #include <sstream>
@@ -10,19 +10,17 @@
 #include "utils/FileSystem.hpp"
 #include "sensors/BME280/bme280.hpp"
 
+// --- HELPERS ---
 
-// Helper to get a timestamped filename
-// Returns: "2026-01-21T12:34:03CET" ISO 8601 format
+// Returns ISO 8601 string: "2026-02-03T12:00:00"
+// or specific format for images
 std::string getTimestamped(const std::string& extension) {
-    //ISO 8601 format
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
-
     std::stringstream ss;
     if(extension == ".csv"){
-        //
         ss << std::put_time(std::localtime(&in_time_t), "%FT%H:%M:%S%Z");
-    }else{
+    } else {
         ss << std::put_time(std::localtime(&in_time_t), "img_%FT%H:%M:%S%Z");
         ss << extension;
     }
@@ -30,39 +28,38 @@ std::string getTimestamped(const std::string& extension) {
 }
 
 void printUsage() {
-    std::cout << "Horus Edge System v0.2" << std::endl;
+    std::cout << "Horus Edge System v1.0 (Torino Release)" << std::endl;
     std::cout << "Usage: ./horus_app --task <task_name>" << std::endl;
     std::cout << "Tasks:" << std::endl;
-    std::cout << "  capture          : Capture image from CSI camera" << std::endl;
-    std::cout << "  monitor_internal : Read BME280 (Internal Temp)" << std::endl;
-    std::cout << "  log_env          : Read DS18B20 (External Temp) & Save CSV" << std::endl;
+    std::cout << "  capture      : Capture image from CSI camera" << std::endl;
+    std::cout << "  monitor_env  : Read BME280 & Save to CSV" << std::endl;
 }
 
-bool getBME280Data(horus::BME280Data& bme280_data) {
-    horus::BME280 sensor(0x76, 1);
+// Helper to init and read BME280
+bool getBME280Data(horus::BME280Data& data) {
+    horus::BME280 sensor(0x76, 1); // Address 0x76, Bus 1
     if (sensor.init()){
-        bme280_data = sensor.readAll();
+        data = sensor.readAll();
         return true;
     }
     return false;
 }
 
+// --- MAIN ---
+
 int main(int argc, char* argv[]) {
-    // 1. Argument Parsing
-    // We expect at least one argument: the task name.
+    // 1. Parse Arguments
     if (argc < 2) {
         printUsage();
         return 1;
     }
 
     std::string task = "";
-    
-    // Simple manual parsing (no extra libraries needed)
     for (int i = 1; i < argc; ++i) {
         if (std::strncmp(argv[i], "--task", 6) == 0) {
             if (i + 1 < argc) {
-                task = argv[i+1]; // Get the value after --task
-            } else { // Handle --task=capture format
+                task = argv[i+1];
+            } else {
                 char* eq = std::strchr(argv[i], '=');
                 if (eq) task = eq + 1;
             }
@@ -74,82 +71,60 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // 2. Task Execution Router
     std::cout << "[Main] Starting Task: " << task << std::endl;
 
-    if(task== "capture"){
-        // --- CAMERA TASK ---
-        
-        // A. Prepare the File System
-        // We use the full path so we don't depend on where we run the script from
+    // 2. Task Router
+
+    if(task == "capture"){
+        // --- TASK: IMAGE CAPTURE ---
         std::string folderPath = horus::utils::getTodaysFolder();
         std::string fullPath = folderPath + "/" + getTimestamped(".jpg");
         std::cout << "[Main] Target File: " << fullPath << std::endl;
 
-        // B. Initialize Camera
         horus::Camera cam;
         if (!cam.start()) {
-            std::cerr << "[Main] Critical: Could not start camera." << std::endl;
-            return 2; // Return non-zero for systemd to know it failed
+            std::cerr << "[Main] Critical: Camera init failed." << std::endl;
+            return 2;
         }
 
-        // C. Capture
         if (cam.capture(fullPath)) {
             std::cout << "[Main] Capture Success." << std::endl;
-            // TODO: Trigger MQTT Upload here in future
         } else {
             std::cerr << "[Main] Capture Failed." << std::endl;
             return 3;
         }
-        
         cam.stop();
-
-    } else if(task == "monitor_internal"){
-        std::cout << "[Main] Checking Internal Environment..." << std::endl;
-        horus::BME280Data env_internal_data;
-
-        if(getBME280Data(env_internal_data)){
-            std::cout << "Internal Temp: " << env_internal_data.temperature << " C" << std::endl;
-            std::cout << "Internal Hum:  " << env_internal_data.humidity << " %" << std::endl;
-            if(env_internal_data.temperature > 60.0){
-                std::cerr << "WARNING: Internal temperature overheating!" << std::endl;
-                // execute --> task = "overheating";
-        }else{
-            std::cerr << "[Main] Failed to read BME280." << std::endl;
-            //todo Write to log the error
-            return 1;
-            }
-        }
-    }else if(task == "monitor_external"){
-
-        // TODO: DS18B20 logic
-        // horus::DS18B20 env_external_data;
-        // float external_temp = env_external_data.getData();
-        float external_temp = 20.0; //dummy data for now
-        
-        // Read internal pressure from BME280:
-        horus::BME280Data internal_data;
-        float pressure = 0.0f;
-        if(getBME280Data(internal_data)){
-            pressure = internal_data.pressure;
-        }
-
-        std::cout << "External Temp: " << external_temp << " C" << std::endl;
-        std::cout << "Pressure: " << pressure << " hPa" << std::endl;
-        
-        // Save to CSV the temperature data coming from DS18B20:
-        std::string timestamp = getTimestamped(".csv");
-
-        // Formatting: Timestamp, External Data, Pressure:
-        std::stringstream csvData;
-        // csvData << env_external_data << "," << pressure;
-        csvData << external_temp << "," << pressure;
-
-        horus::utils::appendToCSV("enviromental_data.csv", timestamp, csvData.str());
+    } 
     
-    }
+    else if(task == "monitor_env"){
+        // --- TASK: ENVIRONMENTAL LOGGING ---
+        // Used to be monitor_external, now consolidated for BME280
+        
+        horus::BME280Data data;
+        if(getBME280Data(data)){
+            // 1. Print to Console (for debugging/journalctl)
+            std::cout << "Temp: " << data.temperature << " C | ";
+            std::cout << "Hum: "  << data.humidity << " % | ";
+            std::cout << "Pres: " << data.pressure << " hPa" << std::endl;
 
-    else{
+            // 2. CSV Formatting
+            // Format: Timestamp, Temp, Humidity, Pressure
+            std::string timestamp = getTimestamped(".csv");
+            std::stringstream csvRow;
+            csvRow << data.temperature << "," << data.humidity << "," << data.pressure;
+
+            // 3. Save to File
+            // Note: csv header should be: Timestamp,Temperature,Humidity,Pressure
+            horus::utils::appendToCSV("environmental_data.csv", timestamp, csvRow.str());
+            std::cout << "[Main] Data appended to CSV." << std::endl;
+
+        } else {
+            std::cerr << "[Main] Failed to read BME280 sensor." << std::endl;
+            return 1;
+        }
+    } 
+    
+    else {
         std::cerr << "[Main] Unknown task: " << task << std::endl;
         printUsage();
         return 1;
