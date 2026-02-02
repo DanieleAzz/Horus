@@ -37,7 +37,7 @@ void printUsage() {
 
 // Helper to init and read BME280
 bool getBME280Data(horus::BME280Data& data) {
-    horus::BME280 sensor(0x76, 1); // Address 0x76, Bus 1
+    horus::BME280 sensor(0x77, 1); // Address 0x76, Bus 1
     if (sensor.init()){
         data = sensor.readAll();
         return true;
