@@ -88,30 +88,48 @@ void Camera::stop() {
 bool Camera::capture(const std::string& filepath) {
     if (!camera) return false;
 
-    // Reset flag
-    {
-        std::lock_guard<std::mutex> lock(cameraMutex);
-        requestComplete = false;
-    }
-
     // Start hardware processing
     camera->start();
     
-    // Send the "Bucket" (Request) to the camera to be filled
-    camera->queueRequest(request.get());
-    
-    std::cout << "[Camera] Request queued. Waiting for hardware..." << std::endl;
+    // --- WARM UP LOOP ---
+    // We capture multiple frames to let Auto-Exposure (AE) & AWB settle.
+    // 30 frames is roughly 1 second, which is usually enough.
+    const int warmupFrames = 30;
 
-    // Wait here until the signal fires
-    std::unique_lock<std::mutex> lock(cameraMutex);
-    cameraCv.wait(lock, [this] { return requestComplete; });
+    std::cout << "[Camera] Warming up (AE/AWB convergence)..." << std::endl;
+
+    for (int i = 0; i < warmupFrames; ++i) {
+        // 1. Reset the flag so we can wait again
+        {
+            std::lock_guard<std::mutex> lock(cameraMutex);
+            requestComplete = false;
+        }
+
+        // 2. Reuse the request (Essential!)
+        // For the very first frame (i=0), the request is fresh.
+        // For subsequent frames, we must tell libcamera we are reusing the buffers.
+        if (i > 0) {
+            request->reuse(Request::ReuseBuffers);
+        }
+
+        // 3. Queue the request
+        camera->queueRequest(request.get());
+
+        // 4. Wait for the hardware to finish this frame
+        std::unique_lock<std::mutex> lock(cameraMutex);
+        cameraCv.wait(lock, [this] { return requestComplete; });
+        
+        // (Optional) Print dots to show progress
+        if (i % 5 == 0) std::cout << "." << std::flush;
+    }
+    std::cout << std::endl;
 
     std::cout << "[Camera] Capture finished." << std::endl;
 
     // Stop camera to save power
     camera->stop();
 
-    // Now save the data from the buffer
+    // Now save the data from the LAST buffer (the fully exposed one)
     Stream *stream = config->at(0).stream();
     FrameBuffer *buffer = request->buffers().at(stream);
     
