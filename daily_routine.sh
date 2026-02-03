@@ -130,28 +130,34 @@ fi
 # 9. MAINTENANCE WINDOW (30 Min)
 log "[Maintenance] Window OPEN (30 min). SSH is possible."
 
-# --- ZEROTIER AUTO-RECONNECT ---
+# --- ZEROTIER AUTO-FIX (Matches Debug Script) ---
 log "[ZeroTier] Restarting service to bind to LTE..."
-# We must restart it because the network interface (usb0) just appeared
-sudo systemctl restart zerotier-one
-sleep 5
 
-# Check Status
-ZT_STATUS=$(sudo zerotier-cli status | awk '{print $2}')
+# 1. Restart to force it to see the new usb0 interface
+sudo systemctl restart zerotier-one
+
+# 2. WAIT 30 SECONDS (Critical! Matches your working debug script)
+# LTE takes time to negotiate the UDP tunnel.
+sleep 30
+
+# 3. Check Status (Column 5 is the real status: ONLINE/OFFLINE)
+ZT_STATUS=$(sudo zerotier-cli status | awk '{print $5}')
 
 if [ "$ZT_STATUS" == "ONLINE" ]; then
-    # Grab the ZeroTier IP address (Interface usually starts with 'zt')
+    # Grab the ZeroTier IP address
     ZT_IP=$(ip -o -4 addr show | grep 'zt' | awk '{print $4}' | cut -d/ -f1 | head -n 1)
-    log "[ZeroTier] SUCCESS: Connected. Virtual IP: ${ZT_IP:-No IP assigned}"
+    log "[ZeroTier] SUCCESS: Connected ($ZT_STATUS). Virtual IP: ${ZT_IP:-No IP assigned}"
 else
-    log "[ZeroTier] WARNING: Service is $ZT_STATUS (Not Online)."
-    # Last ditch attempt: force a network map update
+    log "[ZeroTier] WARNING: Service is $ZT_STATUS. Retrying network map..."
+    # Force a refresh if it's stuck
     sudo zerotier-cli listnetworks > /dev/null 2>&1
 fi
 # -------------------------
+
 # Wait for maintenance (SSH access)
-sleep 1800 # 30 minutes
+sleep 1800 
 log "[Maintenance] Window CLOSED."
+
 
 # 10. SHUTDOWN & SLEEP
 log "[Modem] Entering Flight Mode (Power Save)..."
