@@ -129,6 +129,27 @@ fi
 
 # 9. MAINTENANCE WINDOW (30 Min)
 log "[Maintenance] Window OPEN (30 min). SSH is possible."
+
+# --- ZEROTIER AUTO-RECONNECT ---
+log "[ZeroTier] Restarting service to bind to LTE..."
+# We must restart it because the network interface (usb0) just appeared
+sudo systemctl restart zerotier-one
+sleep 5
+
+# Check Status
+ZT_STATUS=$(sudo zerotier-cli status | awk '{print $2}')
+
+if [ "$ZT_STATUS" == "ONLINE" ]; then
+    # Grab the ZeroTier IP address (Interface usually starts with 'zt')
+    ZT_IP=$(ip -o -4 addr show | grep 'zt' | awk '{print $4}' | cut -d/ -f1 | head -n 1)
+    log "[ZeroTier] SUCCESS: Connected. Virtual IP: ${ZT_IP:-No IP assigned}"
+else
+    log "[ZeroTier] WARNING: Service is $ZT_STATUS (Not Online)."
+    # Last ditch attempt: force a network map update
+    sudo zerotier-cli listnetworks > /dev/null 2>&1
+fi
+# -------------------------
+# Wait for maintenance (SSH access)
 sleep 1800 # 30 minutes
 log "[Maintenance] Window CLOSED."
 
