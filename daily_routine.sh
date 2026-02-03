@@ -129,7 +129,7 @@ fi
 
 # 9. MAINTENANCE WINDOW (30 Min)
 log "[Maintenance] Window OPEN (30 min). SSH is possible."
-sleep 30
+sleep 1800 # 30 minutes
 log "[Maintenance] Window CLOSED."
 
 # 10. SHUTDOWN & SLEEP
