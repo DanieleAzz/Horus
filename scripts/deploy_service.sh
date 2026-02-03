@@ -45,7 +45,7 @@ Wants=dev-ttyUSB2.device
 
 [Service]
 Type=oneshot
-ExecStart=$ROUTINE_SCRIPT
+ExecStart=$BOOT_SCRIPT
 User=$USER_NAME
 WorkingDirectory=$PROJECT_DIR
 StandardOutput=journal
