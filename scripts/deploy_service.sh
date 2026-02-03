@@ -5,12 +5,14 @@ set -e
 PROJECT_DIR=$(pwd)
 EXEC_PATH="$PROJECT_DIR/build/horus_app"
 ROUTINE_SCRIPT="$PROJECT_DIR/daily_routine.sh"
+BOOT_SCRIPT="$PROJECT_DIR/boot_sleepmode.sh"
 USER_NAME=$(whoami)
 
 echo "[Horus] Starting Survival Deployment..."
 echo "  Project Dir: $PROJECT_DIR"
 echo "  Executable:  $EXEC_PATH"
 echo "  Routine:     $ROUTINE_SCRIPT"
+echo "  Boot Script: $BOOT_SCRIPT"
 
 # Validation
 if [ ! -f "$EXEC_PATH" ]; then
@@ -29,6 +31,32 @@ echo "  -> Cleaning up old services..."
 sudo systemctl disable --now horus-internal.timer horus-internal.service 2>/dev/null || true
 sudo systemctl disable --now horus-external.timer horus-external.service 2>/dev/null || true
 sudo systemctl disable --now horus-capture.timer horus-capture.service 2>/dev/null || true
+
+# --- ADD BOOT SILENCER SERVICE ---
+# This ensures the modem is silenced at boot before anything else can interfere
+echo "  -> Configuring Boot Silencer Service..."
+
+sudo bash -c "cat > /etc/systemd/system/horus-boot.service" <<EOF
+[Unit]
+Description=Horus Modem Silencer (Save Power at Boot)
+After=network.target hardware.target
+# We want this to run even if network fails, just needs USB
+Wants=dev-ttyUSB2.device
+
+[Service]
+Type=oneshot
+ExecStart=$ROUTINE_SCRIPT
+User=$USER_NAME
+WorkingDirectory=$PROJECT_DIR
+StandardOutput=journal
+StandardError=journal
+
+# Give it time to finish, but kill it if it hangs
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 # --- 1. ENV MONITOR (Every 15 Minutes) ---
 # Task: monitor_env (BME280 -> CSV)
@@ -63,7 +91,7 @@ Unit=horus-monitor.service
 WantedBy=timers.target
 EOF
 
-# --- 2. DAILY MASTER ROBOT (12:00 PM) ---
+# --- 2. DAILY MASTER (12:00 PM) ---
 # Task: daily_routine.sh (Modem -> GPS -> Picture -> Upload -> Sleep)
 echo "  -> Configuring Daily Master Routine (12:00 PM)..."
 
@@ -99,6 +127,9 @@ EOF
 # --- APPLY CHANGES ---
 echo "[Horus] Reloading Systemd..."
 sudo systemctl daemon-reload
+
+echo "[Horus] Enabling Boot Service..."
+sudo systemctl enable --now horus-boot.service
 
 echo "[Horus] Enabling Timers..."
 sudo systemctl enable --now horus-monitor.timer
