@@ -167,7 +167,7 @@ void saveJpeg(const std::string& filename, void* data, int width, int height, in
     cinfo.image_width = width;
     cinfo.image_height = height;
     cinfo.input_components = 3;     
-    cinfo.in_color_space = JCS_EXT_RGB; // Standard RGB color space
+    cinfo.in_color_space = JCS_RGB; // Standard RGB color space
 
     jpeg_set_defaults(&cinfo);
     jpeg_set_quality(&cinfo, 90, TRUE); // Quality 90%
