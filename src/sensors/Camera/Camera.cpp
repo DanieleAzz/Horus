@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <jpeglib.h>
+#include <vector>
 
 namespace horus {
 
@@ -148,7 +149,7 @@ void Camera::requestCompleteHandler(Request *req) {
     cameraCv.notify_one();
 }
 
-// Helper function to compress RGB data to JPEG
+// Helper function to compress BGR data to JPEG (Swapping to RGB on the fly)
 void saveJpeg(const std::string& filename, void* data, int width, int height, int stride) {
     struct jpeg_compress_struct cinfo;
     struct jpeg_error_mgr jerr;
@@ -166,18 +167,39 @@ void saveJpeg(const std::string& filename, void* data, int width, int height, in
 
     cinfo.image_width = width;
     cinfo.image_height = height;
-    cinfo.input_components = 3;     
-    cinfo.in_color_space = JCS_EXT_BGR; // Standard RGB color space
+    cinfo.input_components = 3;
+    cinfo.in_color_space = JCS_RGB;
 
     jpeg_set_defaults(&cinfo);
-    jpeg_set_quality(&cinfo, 90, TRUE); // Quality 90%
+    jpeg_set_quality(&cinfo, 90, TRUE);
     jpeg_start_compress(&cinfo, TRUE);
 
-    unsigned char* buffer = static_cast<unsigned char*>(data);
+    unsigned char* src_buffer = static_cast<unsigned char*>(data);
+
+    // Temp buffer for one row (to hold the swapped RGB pixels)
+    std::vector<unsigned char> row_buffer(width * 3);
 
     while (cinfo.next_scanline < cinfo.image_height) {
-        // stride is the actual width of the memory row (often aligned to 32/64 bytes)
-        row_pointer[0] = &buffer[cinfo.next_scanline * stride];
+        // Pointer to the current row in the Source (BGR) data
+        const unsigned char* src_row = &src_buffer[cinfo.next_scanline * stride];
+
+        // MANUAL SWAP LOOP: BGR -> RGB
+        // We copy pixel by pixel to the temporary row buffer
+        for (int x = 0; x < width; ++x) {
+            // Source is BGR (Blue=0, Green=1, Red=2)
+            // Dest is RGB (Red=0, Green=1, Blue=2)
+            
+            row_buffer[x * 3 + 0] = src_row[x * 3 + 2];
+            // Source is BGR: [0]=B, [1]=G, [2]=R
+            // We want RGB:        [0]=R, [1]=G, [2]=B
+            
+            row_buffer[x * 3 + 0] = src_row[x * 3 + 2]; // Dest Red   = Source Red (Byte 2)
+            row_buffer[x * 3 + 1] = src_row[x * 3 + 1]; // Dest Green = Source Green (Byte 1)
+            row_buffer[x * 3 + 2] = src_row[x * 3 + 0]; // Dest Blue  = Source Blue (Byte 0)
+        }
+
+        // Point JPEG compressor to our corrected RGB row
+        row_pointer[0] = row_buffer.data();
         jpeg_write_scanlines(&cinfo, row_pointer, 1);
     }
 
@@ -187,7 +209,6 @@ void saveJpeg(const std::string& filename, void* data, int width, int height, in
     
     std::cout << "[Camera] Saved JPEG: " << filename << std::endl;
 }
-
 
 // Memory Mapping
 // We have to map the Kernel's memory (DMA) into our User Space to read it.
