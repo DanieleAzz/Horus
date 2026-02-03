@@ -34,7 +34,7 @@ bool Camera::start() {
     // 2. Configure: We want a Still Capture (High Res)
     config = camera->generateConfiguration({ StreamRole::StillCapture });
     
-    config->at(0).pixelFormat = formats::RGB888;    
+    config->at(0).pixelFormat = formats::BGR888;    
 
     if (config->validate() == CameraConfiguration::Invalid) {
         std::cerr << "[Camera] Invalid configuration." << std::endl;
@@ -167,7 +167,7 @@ void saveJpeg(const std::string& filename, void* data, int width, int height, in
     cinfo.image_width = width;
     cinfo.image_height = height;
     cinfo.input_components = 3;     
-    cinfo.in_color_space = JCS_RGB; // Standard RGB color space
+    cinfo.in_color_space = JCS_EXT_BGR; // Standard RGB color space
 
     jpeg_set_defaults(&cinfo);
     jpeg_set_quality(&cinfo, 90, TRUE); // Quality 90%
