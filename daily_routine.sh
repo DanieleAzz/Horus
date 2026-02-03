@@ -23,6 +23,10 @@ log() {
 }
 
 send_at() {
+    # Check if port is busy before trying
+    if fuser "$USB_AT" >/dev/null 2>&1; then
+        sleep 1
+    fi
     echo -e "$1\r" > "$USB_AT"
     sleep 0.2
 }
@@ -77,18 +81,23 @@ sleep 2
 log "[GPS] Attempting fix..."
 GPS_FIX="No Fix"
 
-# Try 5 times with Timeout to prevent hanging
-for i in {1..5}; do
-    RAW=$(echo -e "AT+CGPSINFO\r" > "$USB_AT"; timeout 3 head -n 5 "$USB_AT" | grep "+CGPSINFO:")
-    
-    if [[ "$RAW" == *"+CGPSINFO:"* && "$RAW" != *",,,,,,"* ]]; then
-        GPS_FIX=${RAW#"+CGPSINFO: "}
-        break
-    fi
-    sleep 1
-done
-log "[GPS] Result: $GPS_FIX"
+# Prepare the command but don't execute yet
+echo -e "AT+CGPSINFO\r" > "$USB_AT"
+
+# Read the response safely using a temporary file descriptor capture
+# We read for 2 seconds then kill the read process
+RAW=$(timeout 2s cat "$USB_AT" | grep "+CGPSINFO:")
+
+if [[ "$RAW" == *"+CGPSINFO:"* && "$RAW" != *",,,,,,"* ]]; then
+    GPS_FIX=${RAW#"+CGPSINFO: "}
+    log "[GPS] Fix Obtained: $GPS_FIX"
+else
+    log "[GPS] No Fix obtained."
+fi
+
+# Append to CSV (Permissions should be fixed now)
 echo "$(date '+%Y-%m-%d %H:%M:%S'),$GPS_FIX" >> "$DATA_DIR/gps_history.csv"
+
 
 # 5.1 TURN OFF GPS TO SAVE POWER:
 log "[GPS] Disabling module..."
@@ -120,13 +129,18 @@ fi
 
 # 9. MAINTENANCE WINDOW (30 Min)
 log "[Maintenance] Window OPEN (30 min). SSH is possible."
-sleep 1800 
+sleep 30
 log "[Maintenance] Window CLOSED."
 
 # 10. SHUTDOWN & SLEEP
 log "[Modem] Entering Flight Mode (Power Save)..."
+
+# Explicitly close GPS first
 send_at "AT+CGPS=0"
-send_at "AT+CFUN=0"
+sleep 1
+
+# Send Flight Mode command
+echo -e "AT+CFUN=0\r" > "$USB_AT"
 sleep 2
 
 log "ROUTINE COMPLETE."
