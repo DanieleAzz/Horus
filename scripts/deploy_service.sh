@@ -108,6 +108,9 @@ User=root
 WorkingDirectory=$PROJECT_DIR
 StandardOutput=journal
 StandardError=journal
+TimeoutStartSec=0
+KillMode=process
+
 EOF
 
 sudo bash -c "cat > /etc/systemd/system/horus-daily.timer" <<EOF

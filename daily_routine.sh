@@ -122,9 +122,33 @@ $APP_PATH --task capture >> "$LOG_FILE" 2>&1
 # 8. UPLOAD TO CLOUD
 if [ "$CLOUD_ENABLED" == "true" ]; then
     log "[Cloud] Syncing to S3..."
+    
+    # Define Dates
     TODAY=$(date +%F)
-    # Use --transfers 4 for better speed on LTE
-    rclone copy "$DATA_DIR" "$RCLONE_REMOTE:$S3_BUCKET/$TODAY" --transfers 4 --log-file="$LOG_FILE"
+    YESTERDAY=$(date -d "yesterday" +%F)
+    
+    # 1. Upload YESTERDAY'S Folder (Catches the afternoon data missed by previous upload)
+    # Rclone will skip files that are already there (Morning data) and just add the new ones.
+    if [ -d "$DATA_DIR/$YESTERDAY" ]; then
+        log "[Cloud] Syncing incomplete data from $YESTERDAY..."
+        rclone copy "$DATA_DIR/$YESTERDAY" "$RCLONE_REMOTE:$S3_BUCKET/$YESTERDAY" \
+            --config "$RCLONE_CONF" --transfers 4 --log-file="$LOG_FILE"
+    fi
+
+    # 2. Upload TODAY'S Folder (Catches the morning data so far)
+    if [ -d "$DATA_DIR/$TODAY" ]; then
+        log "[Cloud] Syncing data from $TODAY..."
+        rclone copy "$DATA_DIR/$TODAY" "$RCLONE_REMOTE:$S3_BUCKET/$TODAY" \
+            --config "$RCLONE_CONF" --transfers 4 --log-file="$LOG_FILE"
+    fi
+
+    # 3. Upload Cumulative GPS Log
+    if [ -f "$DATA_DIR/gps_history.csv" ]; then
+        rclone copy "$DATA_DIR/gps_history.csv" "$RCLONE_REMOTE:$S3_BUCKET/" \
+            --config "$RCLONE_CONF" --log-file="$LOG_FILE"
+    fi
+        
+    log "[Cloud] Upload complete."
 fi
 
 # 9. MAINTENANCE WINDOW (30 Min)
@@ -155,7 +179,12 @@ fi
 # -------------------------
 
 # Wait for maintenance (SSH access)
-sleep 1800 
+# This command creates problem: sleep 1800
+# Wait loop instead:
+for i in {1..$SSH_MAINTENANCE_TIME}; do
+    sleep 60
+    log "[Maintenance] Window still OPEN... ($i min)"
+done
 log "[Maintenance] Window CLOSED."
 
 
