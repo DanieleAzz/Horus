@@ -181,9 +181,12 @@ fi
 # Wait for maintenance (SSH access)
 # This command creates problem: sleep 1800
 # Wait loop instead:
-for i in {1..$SSH_MAINTENANCE_TIME}; do
+for ((i=1; i<=SSH_MAINTENANCE_TIME; i++)); do
     sleep 60
-    log "[Maintenance] Window still OPEN... ($i min)"
+    # Optional: Log status every 5 mins so you don't flood the log file
+    if (( i % 1 == 0 )); then
+        log "[Maintenance] Window active... ($i / $SSH_MAINTENANCE_TIME min)"
+    fi
 done
 log "[Maintenance] Window CLOSED."
 
