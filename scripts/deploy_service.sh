@@ -5,6 +5,7 @@ set -e
 PROJECT_DIR=$(pwd)
 EXEC_PATH="$PROJECT_DIR/build/horus_app"
 ROUTINE_SCRIPT="$PROJECT_DIR/daily_routine.sh"
+CPU_SCIPT="$PROJECT_DIR/monitor_cpu.sh"
 BOOT_SCRIPT="$PROJECT_DIR/boot_sleepmode.sh"
 USER_NAME=$(whoami)
 
@@ -13,6 +14,7 @@ echo "  Project Dir: $PROJECT_DIR"
 echo "  Executable:  $EXEC_PATH"
 echo "  Routine:     $ROUTINE_SCRIPT"
 echo "  Boot Script: $BOOT_SCRIPT"
+echo "  CPU Monitor: $CPU_SCIPT"
 
 # Validation
 if [ ! -f "$EXEC_PATH" ]; then
@@ -24,6 +26,14 @@ if [ ! -f "$ROUTINE_SCRIPT" ]; then
     echo "Please create daily_routine.sh first!"
     exit 1
 fi
+if [ ! -f "$CPU_SCRIPT" ]; then
+    echo "ERROR: Could not find CPU script at $CPU_SCRIPT"
+    echo "Please ensure scripts/monitor_cpu.sh exists!"
+    exit 1
+fi
+
+# Ensure scripts are executable
+chmod +x "$ROUTINE_SCRIPT" "$BOOT_SCRIPT" "$CPU_SCRIPT"
 
 # --- 0. CLEANUP OLD SERVICES ---
 # We disable the old names to prevent conflicts
@@ -31,6 +41,7 @@ echo "  -> Cleaning up old services..."
 sudo systemctl disable --now horus-internal.timer horus-internal.service 2>/dev/null || true
 sudo systemctl disable --now horus-external.timer horus-external.service 2>/dev/null || true
 sudo systemctl disable --now horus-capture.timer horus-capture.service 2>/dev/null || true
+sudo systemctl disable --now horus-cpu.timer horus-cpu.service 2>/dev/null || true
 
 # --- ADD BOOT SILENCER SERVICE ---
 # This ensures the modem is silenced at boot before anything else can interfere
@@ -91,6 +102,38 @@ Unit=horus-monitor.service
 WantedBy=timers.target
 EOF
 
+# --- 2. CPU HEALTH MONITOR (Every 15 Minutes) ---
+# Task: monitor_cpu.sh (Temp/Volt -> CSV)
+echo "  -> Configuring CPU Health Monitor (15 min)..."
+
+sudo bash -c "cat > /etc/systemd/system/horus-cpu.service" <<EOF
+[Unit]
+Description=Horus CPU Health Monitor (Temp & Voltage)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=$CPU_SCRIPT
+User=$USER_NAME
+Group=$USER_NAME
+StandardOutput=journal
+StandardError=journal
+EOF
+
+sudo bash -c "cat > /etc/systemd/system/horus-cpu.timer" <<EOF
+[Unit]
+Description=Trigger CPU Monitor every 15 minutes
+
+[Timer]
+# Offset slightly from BME280 to avoid writing at exact same second (optional safety)
+OnBootSec=5min
+OnUnitActiveSec=15min
+Unit=horus-cpu.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
 # --- 2. DAILY MASTER (12:00 PM) ---
 # Task: daily_routine.sh (Modem -> GPS -> Picture -> Upload -> Sleep)
 echo "  -> Configuring Daily Master Routine (12:00 PM)..."
@@ -136,6 +179,7 @@ sudo systemctl enable --now horus-boot.service
 
 echo "[Horus] Enabling Timers..."
 sudo systemctl enable --now horus-monitor.timer
+sudo systemctl enable --now horus-cpu.timer
 sudo systemctl enable --now horus-daily.timer
 
 echo "[Horus] Deployment Complete!"

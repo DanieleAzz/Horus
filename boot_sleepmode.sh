@@ -20,6 +20,9 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$BOOT_LOG_FILE"
 }
 
+log "========================================"
+log "STARTING BOOT"
+
 log "[Boot] Silencer started. Waiting for modem..."
 
 # 0. DRIVER INJECTION (Critical for ID 9018)

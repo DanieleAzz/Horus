@@ -115,8 +115,13 @@ int main(int argc, char* argv[]) {
 
             // 3. Save to File
             // Note: csv header should be: Timestamp,Temperature,Humidity,Pressure
-            horus::utils::appendToCSV("environmental_data.csv", timestamp, csvRow.str());
-            std::cout << "[Main] Data appended to CSV." << std::endl;
+            // Path:
+            std::string folderPath = horus::utils::getTodaysFolder();
+            std::string fullPathCSV = folderPath + "/environmental_data.csv";
+            std::cout << "[Main] .csv Target File: " << fullPathCSV << std::endl;
+
+            horus::utils::appendToCSV(fullPathCSV, timestamp, csvRow.str());
+            std::cout << "[Main] Data appended to: " << fullPathCSV << std::endl;
 
         } else {
             std::cerr << "[Main] Failed to read BME280 sensor." << std::endl;

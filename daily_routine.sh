@@ -35,9 +35,24 @@ send_at() {
 log "========================================"
 log "STARTING ROUTINE ($PROJECT_NAME)"
 
-# 1. RESTORE TIME FROM BATTERY (RTC)
+# 0. RESTORE TIME FROM BATTERY (RTC)
 sudo hwclock -s
 log "[Time] System clock synced from RTC Battery: $(date)"
+
+# 1. TAKE PICTURE FIRST (Captures the state before we mess with the modem)
+log "[rpicam-jpeg Camera] Taking picture..."
+IMG_NAME="img_$(date '+%Y-%m-%dT%H_%M_%S').jpg"
+TODAY_DIR="$DATA_DIR/$(date +%F)"
+mkdir -p "$TODAY_DIR"
+# Capture Command
+# -t 2000: Warm up for 2s (Auto Exposure/White Balance)
+# --width 4608 --height 2592: Full Res (IMX708)
+if rpicam-jpeg -o "$TODAY_DIR/$IMG_NAME" --nopreview -t 3000; then
+    log "[Camera] Saved: $TODAY_DIR/$IMG_NAME"
+else
+    log "[Camera] ERROR: Capture failed."
+fi
+
 
 # 2. HARDWARE WAKE UP
 log "[Modem] Triggering Hardware Reset (GPIO $PIN_RST)..."
@@ -147,6 +162,12 @@ if [ "$CLOUD_ENABLED" == "true" ]; then
         rclone copy "$DATA_DIR/gps_history.csv" "$RCLONE_REMOTE:$S3_BUCKET/" \
             --config "$RCLONE_CONF" --log-file="$LOG_FILE"
     fi
+
+    # 4. Upload Cumulative CPU Log
+    if [ -f "$DATA_DIR/cpu_info.csv" ]; then
+        rclone copy "$DATA_DIR/cpu_info.csv" "$RCLONE_REMOTE:$S3_BUCKET/" \
+            --config "$RCLONE_CONF" --log-file="$LOG_FILE"
+    fi
         
     log "[Cloud] Upload complete."
 fi
@@ -178,14 +199,20 @@ else
 fi
 # -------------------------
 
+# --- ABSOLUTE TIME MAINTENANCE WINDOW ---
 # Wait for maintenance (SSH access)
-# This command creates problem: sleep 1800
-# Wait loop instead:
-for ((i=1; i<=SSH_MAINTENANCE_TIME; i++)); do
+START_TIME=$(date +%s)
+END_TIME=$((START_TIME + SSH_MAINTENANCE_TIME * 60))
+
+log "[Maintenance] Window starts. Deadline: $(date -d @$END_TIME '+%H:%M:%S')"
+
+while [ "$(date +%s)" -lt "$END_TIME" ]; do
     sleep 60
-    # Optional: Log status every 5 mins so you don't flood the log file
-    if (( i % 1 == 0 )); then
-        log "[Maintenance] Window active... ($i / $SSH_MAINTENANCE_TIME min)"
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$(( (CURRENT_TIME - START_TIME) / 60 ))
+
+    if (( ELAPSED % 5 == 0)); then
+        log "[Maintenance] Window active... ($ELAPSED / $SSH_MAINTENANCE_TIME min)"
     fi
 done
 log "[Maintenance] Window CLOSED."
@@ -201,6 +228,11 @@ sleep 1
 # Send Flight Mode command
 echo -e "AT+CFUN=0\r" > "$USB_AT"
 sleep 2
+
+# FIX PERMISSIONS (Crucial for 15-min logs)
+log "[Maintenance] Fixing file permissions..."
+chown -R horus:horus "$DATA_DIR"
+sleep 1
 
 log "ROUTINE COMPLETE."
 log "========================================"

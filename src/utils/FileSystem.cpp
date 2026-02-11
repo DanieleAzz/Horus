@@ -22,9 +22,9 @@ std::string getTodaysFolder(){
     return path;
 }
 
-void appendToCSV(const std::string& filename, const std::string& timestamp, const std::string& env_data) {
+void appendToCSV(const std::string& fullPath, const std::string& timestamp, const std::string& env_data) {
 
-    std::string path = getTodaysFolder() + "/" + filename;
+    std::string path = fullPath;
     
     
     // Check if file exists to write header
@@ -34,12 +34,16 @@ void appendToCSV(const std::string& filename, const std::string& timestamp, cons
 
     if (file.is_open()) {
         if (!fileExists) {
-            file << "Timestamp,External_Temperature_C,Pressure_hPa\n"; //First row of the .csv file
+            file << "Timestamp,External_Temperature_C,Humidity_Percent,Pressure_hPa\n"; //First row of the .csv file
         }
         file << timestamp << "," << env_data << "\n";
         std::cout << "[FileSystem] Data appended to " << path << " successfully." << std::endl;
         file.close();
+    }else
+    {
+        std::cerr << "[FileSystem] ERROR: Could not open file at: " << path << std::endl;
     }
+    
 }
 
 }
